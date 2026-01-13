@@ -1,0 +1,13 @@
+apiVersion: v2
+name: weather-proxy
+description: A production-ready weather proxy API with caching and observability
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+keywords:
+  - weather
+  - api
+  - proxy
+  - redis
+maintainers:
+  - name: Weather Proxy Team

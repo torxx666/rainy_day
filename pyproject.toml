@@ -1,0 +1,67 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "weather-proxy"
+version = "1.0.0"
+description = "Production-ready weather proxy API with caching and observability"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [
+    {name = "Weather Proxy Team"}
+]
+dependencies = [
+    "fastapi>=0.109.0",
+    "uvicorn[standard]>=0.27.0",
+    "httpx>=0.26.0",
+    "redis>=5.0.1",
+    "pydantic>=2.5.3",
+    "pydantic-settings>=2.1.0",
+    "structlog>=24.1.0",
+    "prometheus-client>=0.19.0",
+    "pybreaker>=1.0.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.4",
+    "pytest-asyncio>=0.23.3",
+    "pytest-cov>=4.1.0",
+    "pytest-mock>=3.12.0",
+    "httpx>=0.26.0",
+    "ruff>=0.1.14",
+    "black>=24.1.1",
+    "fakeredis>=2.21.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = "--cov=app --cov-report=term-missing --cov-report=html"
+
+[tool.coverage.run]
+source = ["app"]
+omit = ["*/tests/*", "*/__pycache__/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP", "B", "A", "C4", "T20"]
+ignore = ["E501"]
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]

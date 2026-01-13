@@ -1,0 +1,16 @@
+# Dockerfile for running tests
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install dependencies
+COPY pyproject.toml ./
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -e ".[dev]"
+
+# Copy application code
+COPY app ./app
+COPY tests ./tests
+
+# Run tests by default
+CMD ["pytest", "--cov=app", "--cov-report=term-missing", "-v"]
