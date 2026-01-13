@@ -49,3 +49,16 @@ def mock_weather_response():
             "time": "2024-01-13T12:00",
         }
     }
+
+
+@pytest.fixture(autouse=True)
+def disable_rate_limiting(monkeypatch):
+    """Disable rate limiting for all tests."""
+    # Override the rate limit to be unlimited for tests
+    from app.main import limiter
+    
+    # Clear any existing rate limit state
+    limiter._storage.reset()
+    
+    # Set a very high limit for tests
+    monkeypatch.setattr(limiter, "enabled", False)

@@ -289,6 +289,51 @@ autoscaling:
 
 ## 📊 Monitoring
 
+### Grafana Dashboard
+
+The application includes a pre-configured Grafana dashboard with comprehensive metrics visualization:
+
+![Grafana Dashboard Overview](docs/grafana_dashboard.png)
+
+**Dashboard Features:**
+- **Request Rate**: Real-time requests per second by endpoint
+- **Error Rate**: Percentage of failed requests with health indicators
+- **Request Latency**: p50 and p95 latency tracking
+- **Cache Hit Rate**: Cache efficiency monitoring
+- **Status Code Distribution**: Visual breakdown of HTTP responses
+- **Total Requests**: Cumulative request counter with trend
+
+### Prometheus Alerts
+
+8 comprehensive alert rules monitor system health and performance:
+
+![Grafana Alerts View](docs/grafana_alerts.png)
+
+**Alert Rules:**
+- **HighErrorRate** (Warning): >5% error rate for 5 minutes
+- **CriticalErrorRate** (Critical): >10% error rate for 2 minutes
+- **HighLatency** (Warning): p95 latency >2s for 5 minutes
+- **CriticalLatency** (Critical): p95 latency >5s for 2 minutes
+- **LowCacheHitRate** (Info): Cache hit rate <50% for 10 minutes
+- **ServiceDown** (Critical): Service unavailable for 1 minute
+- **RedisConnectionIssues** (Warning): Redis connectivity problems
+
+### Setup
+
+```bash
+# Start monitoring stack
+docker-compose up -d
+
+# Access Grafana
+open http://localhost:3000
+# Login: admin / admin
+
+# Access Prometheus
+open http://localhost:9090
+```
+
+See [MONITORING.md](MONITORING.md) and [GRAFANA_SETUP.md](GRAFANA_SETUP.md) for detailed setup instructions.
+
 ### Prometheus Integration
 
 ```yaml

@@ -103,6 +103,31 @@ class CacheService:
         except RedisError:
             return False
 
+    async def get_stale(self, key: str) -> dict[str, Any] | None:
+        """Get stale value from cache (ignoring TTL).
+        
+        Useful for stale-while-revalidate pattern when external service is down.
+        
+        Args:
+            key: Cache key
+            
+        Returns:
+            Cached value or None if not found
+        """
+        if not self.redis:
+            return None
+
+        try:
+            # Try to get value even if expired
+            value = await self.redis.get(key)
+            if value:
+                logger.info("cache_stale_hit", key=key)
+                return json.loads(value)
+            return None
+        except (RedisError, json.JSONDecodeError) as e:
+            logger.error("cache_stale_get_error", key=key, error=str(e))
+            return None
+
 
 # Global cache instance
 cache = CacheService()

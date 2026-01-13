@@ -9,6 +9,9 @@ import structlog
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, PlainTextResponse
 from prometheus_client import Counter, Histogram, generate_latest
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 from app.core.config import settings
 from app.core.logging import configure_logging, get_logger
@@ -58,12 +61,20 @@ async def lifespan(app: FastAPI):
     logger.info("application_stopped")
 
 
+# Initialize rate limiter
+limiter = Limiter(key_func=get_remote_address)
+
 # Create FastAPI app
 app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
+    description="Production-ready weather proxy API with caching, monitoring, and resilience patterns",
     lifespan=lifespan,
 )
+
+# Add rate limiter state and exception handler
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
 @app.middleware("http")
@@ -95,11 +106,18 @@ async def metrics_middleware(request: Request, call_next):
     return response
 
 
-@app.get("/health", response_model=HealthResponse)
+@app.get(
+    "/health",
+    response_model=HealthResponse,
+    summary="Combined health check",
+    description="Returns overall service health including Redis connection status",
+    tags=["Health"],
+)
 async def health_check():
-    """Health check endpoint.
+    """Combined health check endpoint.
     
     Returns service health status and Redis connection state.
+    This endpoint checks both application liveness and readiness.
     """
     redis_connected = await cache.is_connected()
     
@@ -112,18 +130,121 @@ async def health_check():
     )
 
 
-@app.get("/weather", response_model=WeatherData, responses={400: {"model": ErrorResponse}, 503: {"model": ErrorResponse}})
-async def get_weather(city: str):
+@app.get(
+    "/health/live",
+    summary="Liveness probe",
+    description="Kubernetes liveness probe - checks if application is running",
+    tags=["Health"],
+    status_code=200,
+)
+async def liveness():
+    """Liveness probe for Kubernetes.
+    
+    Returns 200 if the application is alive and running.
+    This endpoint should always return 200 unless the application is completely dead.
+    """
+    return {"status": "alive"}
+
+
+@app.get(
+    "/health/ready",
+    response_model=HealthResponse,
+    summary="Readiness probe",
+    description="Kubernetes readiness probe - checks if application can serve traffic",
+    tags=["Health"],
+    responses={
+        200: {"description": "Service is ready"},
+        503: {"description": "Service is not ready"},
+    },
+)
+async def readiness():
+    """Readiness probe for Kubernetes.
+    
+    Returns 200 if the application is ready to serve traffic.
+    Checks Redis connectivity and other critical dependencies.
+    
+    Raises:
+        HTTPException: 503 if service is not ready
+    """
+    redis_connected = await cache.is_connected()
+    
+    if not redis_connected:
+        logger.warning("readiness_check_failed", redis_connected=False)
+        raise HTTPException(
+            status_code=503,
+            detail="Service not ready: Redis not connected",
+        )
+    
+    return HealthResponse(
+        status="ready",
+        version=settings.app_version,
+        redis_connected=redis_connected,
+    )
+
+
+@app.get(
+    "/weather",
+    response_model=WeatherData,
+    summary="Get weather for a city",
+    description="""Fetch current weather data for a specified city.
+    
+    This endpoint returns real-time weather information including temperature,
+    wind speed, and weather conditions. Results are cached for 5 minutes to
+    optimize performance and reduce external API calls.
+    
+    **Rate Limit**: 100 requests per minute per IP address
+    """,
+    response_description="Weather data with temperature in Celsius, wind speed in km/h",
+    tags=["Weather"],
+    responses={
+        200: {
+            "description": "Successful response",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "city": "Paris",
+                        "temperature": 15.5,
+                        "wind_speed": 12.3,
+                        "weather_code": 1,
+                        "cached": False,
+                    }
+                }
+            },
+        },
+        400: {
+            "model": ErrorResponse,
+            "description": "Invalid city name or city not found",
+        },
+        429: {
+            "description": "Rate limit exceeded",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "error": "Rate limit exceeded",
+                        "detail": "Too many requests. Limit: 100 per 1 minute",
+                    }
+                }
+            },
+        },
+        503: {
+            "model": ErrorResponse,
+            "description": "Weather service unavailable",
+        },
+    },
+)
+@limiter.limit("100/minute")
+async def get_weather(request: Request, city: str):
     """Get weather data for a city.
     
     Args:
-        city: City name (e.g., "Paris", "London")
+        request: FastAPI request object (for rate limiting)
+        city: City name (e.g., "Paris", "London", "Tokyo")
         
     Returns:
         Weather data including temperature, wind speed, and weather code
         
     Raises:
-        HTTPException: If city not found or service unavailable
+        HTTPException: If city not found (400) or service unavailable (503)
     """
     if not city or not city.strip():
         raise HTTPException(status_code=400, detail="City parameter is required")
@@ -148,11 +269,20 @@ async def get_weather(city: str):
         raise HTTPException(status_code=503, detail=str(e))
 
 
-@app.get("/metrics", response_class=PlainTextResponse)
+@app.get(
+    "/metrics",
+    response_class=PlainTextResponse,
+    summary="Prometheus metrics",
+    description="Exposes application metrics in Prometheus format for monitoring and alerting",
+    tags=["Monitoring"],
+)
 async def metrics():
     """Prometheus metrics endpoint.
     
-    Returns metrics in Prometheus format.
+    Returns metrics in Prometheus format including:
+    - Request counts by endpoint and status code
+    - Request duration histograms
+    - Cache hit/miss counters
     """
     return generate_latest()
 

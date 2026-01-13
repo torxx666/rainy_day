@@ -31,8 +31,15 @@ class WeatherService:
     """Weather data service with caching and resilience."""
 
     def __init__(self):
-        """Initialize weather service."""
-        self.client = httpx.AsyncClient(timeout=settings.request_timeout)
+        """Initialize weather service with optimized connection pooling."""
+        self.client = httpx.AsyncClient(
+            timeout=settings.request_timeout,
+            limits=httpx.Limits(
+                max_keepalive_connections=20,
+                max_connections=100,
+                keepalive_expiry=30.0,
+            ),
+        )
 
     async def close(self) -> None:
         """Close HTTP client."""
