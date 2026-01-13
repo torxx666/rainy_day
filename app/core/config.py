@@ -35,5 +35,12 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     log_json: bool = True
 
+    # Cache Warming
+    cache_warming_enabled: bool = True
+    popular_cities: list[str] = ["Netanya","Raanana",
+        "Paris", "London", "New York", "Tokyo", "Berlin",
+        "Sydney", "Moscow", "Dubai", "Singapore", "Los Angeles"
+    ]
+
 
 settings = Settings()

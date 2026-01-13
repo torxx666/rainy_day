@@ -1,5 +1,6 @@
 """FastAPI application with observability and graceful shutdown."""
 
+import asyncio
 import signal
 import sys
 import uuid
@@ -51,6 +52,24 @@ async def lifespan(app: FastAPI):
         raise
     
     logger.info("application_started")
+    
+    # Warm cache in background (non-blocking) after a small delay
+    if settings.cache_warming_enabled:
+        logger.info("cache_warming_task_scheduled")
+        
+        async def delayed_cache_warming():
+            try:
+                await asyncio.sleep(2)  # Wait 2 seconds for everything to be ready
+                logger.info("cache_warming_task_starting")
+                from app.services.cache_warmer import warm_cache
+                result = await warm_cache()
+                logger.info("cache_warming_task_completed", result=result)
+            except Exception as e:
+                logger.error("cache_warming_task_failed", error=str(e), exc_info=True)
+        
+        asyncio.create_task(delayed_cache_warming())
+    else:
+        logger.info("cache_warming_disabled_in_config")
     
     yield
     
